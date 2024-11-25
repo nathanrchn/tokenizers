@@ -490,7 +490,6 @@ impl BpeTrainer {
         //
         if let Some(initial_vocab) = initial_vocab {
             self.add_initial_vocab(initial_vocab, &mut word_to_id, &mut id_to_word);
-            self.update_progress(&progress, initial_vocab.len(), "Add initial vocab");
         } else {
             self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
         }
