@@ -44,6 +44,11 @@ class BpeTrainer(Trainer):
             This can help with reducing polluting your vocabulary with
             highly repetitive tokens like `======` for wikipedia
 
+        initial_vocab (:obj:`List[str]`, `optional`):
+            An optional initial vocabulary to use.
+
+        initial_merges (:obj: `List[((int, int), int)]`, `optional`):
+            An optional initial merges list to use.
     """
 
 class UnigramTrainer(Trainer):

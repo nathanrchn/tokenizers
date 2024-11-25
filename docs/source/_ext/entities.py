@@ -84,7 +84,9 @@ class AllEntities:
 
             name, _ = node.children
             if name.tagname != "field_name":
-                raise Exception(f"Expected a field name here, found {name_node.tagname}")
+                raise Exception(
+                    f"Expected a field name here, found {name_node.tagname}"
+                )
 
             if str(name.children[0]) == "global":
                 return True
@@ -99,10 +101,15 @@ class AllEntities:
             if name_node.tagname != "term":
                 raise Exception(f"Expected a term here, found {name_node.tagname}")
             if content_node.tagname != "definition":
-                raise Exception(f"Expected a definition here, found {content_node.tagname}")
+                raise Exception(
+                    f"Expected a definition here, found {content_node.tagname}"
+                )
 
             name = str(name_node.children[0])
-            if len(content_node.children) == 1 and content_node.children[0].tagname == "paragraph":
+            if (
+                len(content_node.children) == 1
+                and content_node.children[0].tagname == "paragraph"
+            ):
                 content = content_node.children[0].children[0]
             else:
                 content = content_node
@@ -129,7 +136,9 @@ class AllEntities:
             elif node.tagname == "definition_list":
                 entities.extend(self._extract_entities(node.children))
             else:
-                raise Exception(f"Expected a list of terms/options, found {node.tagname}")
+                raise Exception(
+                    f"Expected a list of terms/options, found {node.tagname}"
+                )
 
         self._add_entities(entities, language, is_global, docname)
 
@@ -205,7 +214,7 @@ def entity_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
 
 
 def process_entity_nodes(app, doctree, docname):
-    """ Replace all the entities by their content """
+    """Replace all the entities by their content"""
     env = app.builder.env
 
     entities = AllEntities.install(env)
@@ -215,7 +224,9 @@ def process_entity_nodes(app, doctree, docname):
     try:
         language = next(l for l in LANGUAGES if l in app.tags)
     except Exception:
-        logger.warning(f"No language tag specified, not resolving entities in {docname}")
+        logger.warning(
+            f"No language tag specified, not resolving entities in {docname}"
+        )
 
     for node in doctree.traverse(EntityNode):
         if language is None:
@@ -224,19 +235,21 @@ def process_entity_nodes(app, doctree, docname):
             entity = entities.get(language, node.entity, docname)
             if entity is None:
                 node.replace_self(nodes.Text(_(node.entity), _(node.entity)))
-                logger.warning(f'Entity "{node.entity}" has not been defined', location=node)
+                logger.warning(
+                    f'Entity "{node.entity}" has not been defined', location=node
+                )
             else:
                 node.replace_self(entity["content"])
 
 
 def purge_entities(app, env, docname):
-    """ Purge any entity that comes from the given docname """
+    """Purge any entity that comes from the given docname"""
     entities = AllEntities.install(env)
     entities.purge(docname)
 
 
 def merge_entities(app, env, docnames, other):
-    """ Merge multiple environment entities """
+    """Merge multiple environment entities"""
     entities = AllEntities.install(env)
     other_entities = AllEntities.install(other)
     entities.merge(other_entities)

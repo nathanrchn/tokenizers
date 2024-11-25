@@ -177,6 +177,9 @@ macro_rules! setter {
 ///         This can help with reducing polluting your vocabulary with
 ///         highly repetitive tokens like `======` for wikipedia
 ///
+///     initial_vocab (:obj:`List[str]`, `optional`):
+///         An optional initial vocabulary to use.
+///
 #[pyclass(extends=PyTrainer, module = "tokenizers.trainers", name = "BpeTrainer")]
 pub struct PyBpeTrainer {}
 #[pymethods]
@@ -354,6 +357,14 @@ impl PyBpeTrainer {
                         builder = builder.continuing_subword_prefix(val.extract()?)
                     }
                     "end_of_word_suffix" => builder = builder.end_of_word_suffix(val.extract()?),
+                    "initial_vocab" => {
+                        let initial_vocab: Vec<String> = val.extract()?;
+                        builder = builder.initial_vocab(initial_vocab);
+                    },
+                    "initial_merges" => {
+                        let initial_merges: Vec<((u32, u32), u32)> = val.extract()?;
+                        builder = builder.initial_merges(initial_merges);
+                    }
                     _ => println!("Ignored unknown kwargs option {}", key),
                 };
             }

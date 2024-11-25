@@ -45,6 +45,8 @@ struct Config {
     continuing_subword_prefix: Option<String>,
     end_of_word_suffix: Option<String>,
     max_token_length: Option<usize>,
+    initial_vocab: Option<Vec<String>>,
+    initial_merges: Option<Vec<(Pair, u32)>>,
 }
 
 /// A `BpeTrainerBuilder` can be used to create a `BpeTrainer` with a custom
@@ -66,6 +68,8 @@ impl Default for BpeTrainerBuilder {
                 continuing_subword_prefix: None,
                 end_of_word_suffix: None,
                 max_token_length: None,
+                initial_vocab: None,
+                initial_merges: None,
             },
         }
     }
@@ -139,6 +143,20 @@ impl BpeTrainerBuilder {
         self
     }
 
+    /// Set the initial vocabulary
+    #[must_use]
+    pub fn initial_vocab(mut self, initial_vocab: Vec<String>) -> Self {
+        self.config.initial_vocab = Some(initial_vocab);
+        self
+    }
+
+    /// Set the initial merges
+    #[must_use]
+    pub fn initial_merges(mut self, initial_merges: Vec<(Pair, u32)>) -> Self {
+        self.config.initial_merges = Some(initial_merges);
+        self
+    }
+
     /// Constructs the final BpeTrainer
     pub fn build(self) -> BpeTrainer {
         BpeTrainer {
@@ -151,6 +169,8 @@ impl BpeTrainerBuilder {
             continuing_subword_prefix: self.config.continuing_subword_prefix,
             end_of_word_suffix: self.config.end_of_word_suffix,
             max_token_length: self.config.max_token_length,
+            initial_vocab: self.config.initial_vocab,
+            initial_merges: self.config.initial_merges,
             words: HashMap::new(),
         }
     }
@@ -194,6 +214,10 @@ pub struct BpeTrainer {
     pub end_of_word_suffix: Option<String>,
     /// An optional parameter to limit the max length of any single token
     pub max_token_length: Option<usize>,
+    /// An optional initial vocabulary to use
+    pub initial_vocab: Option<Vec<String>>,
+    /// An optional initial merges to use
+    pub initial_merges: Option<Vec<(Pair, u32)>>,
 
     words: HashMap<String, u64>,
 }
@@ -319,6 +343,20 @@ impl BpeTrainer {
         });
     }
 
+    fn add_initial_vocab(
+        &self,
+        initial_vocab: &Vec<String>,
+        w2id: &mut HashMap<String, u32>,
+        id2w: &mut Vec<String>,
+    ) {
+        for token in initial_vocab {
+            if !w2id.contains_key(token) {
+                id2w.push(token.clone());
+                w2id.insert(token.clone(), (id2w.len() - 1) as u32);
+            }
+        }
+    }
+
     /// Tokenize words and add subwords to the vocabulary when relevant
     fn tokenize_words(
         &self,
@@ -432,6 +470,8 @@ impl BpeTrainer {
     pub fn do_train(
         &self,
         word_counts: &HashMap<String, u64>,
+        initial_vocab: Option<&Vec<String>>,
+        initial_merges: Option<&Vec<(Pair, u32)>>,
         model: &mut BPE,
     ) -> Result<Vec<AddedToken>> {
         let mut word_to_id: HashMap<String, u32> = HashMap::with_capacity(self.vocab_size);
@@ -448,7 +488,12 @@ impl BpeTrainer {
         //
         // 2. Compute the initial alphabet
         //
-        self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
+        if let Some(initial_vocab) = initial_vocab {
+            self.add_initial_vocab(initial_vocab, &mut word_to_id, &mut id_to_word);
+            self.update_progress(&progress, initial_vocab.len(), "Add initial vocab");
+        } else {
+            self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
+        }
 
         //
         // 3. Tokenize words
@@ -480,8 +525,18 @@ impl BpeTrainer {
         //
         // 5. Do merges
         //
-        self.update_progress(&progress, self.vocab_size, "Compute merges");
+        let mut merges_progress_len = self.vocab_size;
+        if let (Some(initial_vocab), Some(initial_merges)) = (initial_vocab, initial_merges) {
+            merges_progress_len = initial_merges.len() + (self.vocab_size - initial_vocab.len())
+        }
+        self.update_progress(&progress, merges_progress_len, "Compute merges");
         let mut merges: Vec<(Pair, u32)> = vec![];
+        if let Some(initial_merges) = initial_merges {
+            merges.extend(initial_merges.iter());
+            if let Some(p) = &progress {
+                p.inc(merges.len() as u64);
+            }
+        }
         loop {
             // Stop as soon as we have a big enough vocabulary
             if word_to_id.len() >= self.vocab_size {
@@ -633,7 +688,7 @@ impl Trainer for BpeTrainer {
 
     /// Train a BPE model
     fn train(&self, model: &mut BPE) -> Result<Vec<AddedToken>> {
-        self.do_train(&self.words, model)
+        self.do_train(&self.words, self.initial_vocab.as_ref(), self.initial_merges.as_ref(), model)
     }
 
     /// Whether we should show progress
@@ -701,7 +756,7 @@ mod tests {
             .min_frequency(2)
             .build();
         let mut model = BPE::default();
-        trainer.do_train(&word_counts, &mut model).unwrap();
+        trainer.do_train(&word_counts, None, None, &mut model).unwrap();
 
         // Vocab should contain all of the characters from the `word_counts` mapping
         // as well as three merges: 're', 'are', and 'is'.
@@ -782,7 +837,7 @@ mod tests {
             .min_frequency(0)
             .build();
         let mut model = BPE::default();
-        trainer.do_train(&long_word_counts, &mut model).unwrap();
+        trainer.do_train(&long_word_counts, None, None, &mut model).unwrap();
         let vocab = model.get_vocab();
         for token in vocab.keys() {
             assert!(
@@ -822,7 +877,7 @@ mod tests {
             .min_frequency(0)
             .build();
         let mut model = BPE::default();
-        trainer.do_train(&long_word_counts, &mut model).unwrap();
+        trainer.do_train(&long_word_counts, None, None, &mut model).unwrap();
         let trained_vocab: HashMap<String, u32> = model.get_vocab();
         let expected_vocab: HashMap<String, u32> = [
             ("短", 12),
