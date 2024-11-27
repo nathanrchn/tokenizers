@@ -485,22 +485,31 @@ impl BpeTrainer {
         //
         self.add_special_tokens(&mut word_to_id, &mut id_to_word);
 
-        //
-        // 2. Compute the initial alphabet
-        //
+        let mut words = vec![];
+        let mut counts = vec![];
         if let Some(initial_vocab) = initial_vocab {
             self.add_initial_vocab(initial_vocab, &mut word_to_id, &mut id_to_word);
-        } else {
-            self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
-        }
 
-        //
-        // 3. Tokenize words
-        //
-        self.update_progress(&progress, word_counts.len(), "Tokenize words");
-        let (mut words, counts) =
-            self.tokenize_words(word_counts, &mut word_to_id, &mut id_to_word, &progress);
-        self.finalize_progress(&progress, words.len());
+            for (word, count) in word_counts {
+                let mut current_word = Word::new();
+                word.split("<|FTL|>").for_each(|w| current_word.add(word_to_id[w], w.len()));
+                words.push(current_word);
+                counts.push(*count);
+            }
+        } else {
+            //
+            // 2. Compute the initial alphabet
+            //
+            self.compute_alphabet(word_counts, &mut word_to_id, &mut id_to_word);
+
+            //
+            // 3. Tokenize words
+            //
+            self.update_progress(&progress, word_counts.len(), "Tokenize words");
+            (words, counts) =
+                self.tokenize_words(word_counts, &mut word_to_id, &mut id_to_word, &progress);
+            self.finalize_progress(&progress, words.len());
+        }
 
         //
         // 4. Count pairs in words

@@ -17,6 +17,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
@@ -1396,12 +1397,23 @@ where
                     }),
                     |seq| {
                         let normalized = self.do_normalize(seq.as_ref())?;
-                        let pre_tokenized = self.do_pre_tokenize(normalized)?;
-                        Ok(pre_tokenized
-                            .get_splits(OffsetReferential::Original, OffsetType::Byte)
-                            .into_iter()
-                            .map(|(s, _, _)| s.to_owned())
-                            .collect())
+                        let mut pre_tokenized = self.do_pre_tokenize(normalized)?;
+                        
+                        if self.model.get_vocab_size() > 0 {
+                            pre_tokenized.tokenize(|normalized| self.model.tokenize(normalized.get()))?;
+
+                            Ok(pre_tokenized
+                                .get_splits(OffsetReferential::Original, OffsetType::Byte)
+                                .into_iter()
+                                .map(|(_, _, tokens)| tokens.as_ref().unwrap().into_iter().map(|token| token.value.clone()).join("<|FTL|>"))
+                                .collect())
+                        } else {
+                            Ok(pre_tokenized
+                                .get_splits(OffsetReferential::Original, OffsetType::Byte)
+                                .into_iter()
+                                .map(|(s, _, _)| s.to_owned())
+                                .collect())
+                        }
                     },
                 )?;
 
@@ -1447,12 +1459,27 @@ where
             }),
             |seq| {
                 let normalized = self.do_normalize(seq.as_ref())?;
-                let pre_tokenized = self.do_pre_tokenize(normalized)?;
-                Ok(pre_tokenized
-                    .get_splits(OffsetReferential::Original, OffsetType::Byte)
-                    .into_iter()
-                    .map(|(s, _, _)| s.to_owned())
-                    .collect())
+                let mut pre_tokenized = self.do_pre_tokenize(normalized)?;
+                
+                if self.model.get_vocab_size() > 0 {
+                    // let encoded = self.do_tokenize(pre_tokenized, 0, None, OffsetType::Byte)?;
+                    // let post_encoded = self.post_process(encoded, None, false)?;
+                    // Ok(encoded.get_tokens().to_vec())
+
+                    pre_tokenized.tokenize(|normalized| self.model.tokenize(normalized.get()))?;
+
+                    Ok(pre_tokenized
+                        .get_splits(OffsetReferential::Original, OffsetType::Byte)
+                        .into_iter()
+                        .map(|(_, _, tokens)| tokens.as_ref().unwrap().into_iter().map(|token| token.value.clone()).join("<|FTL|>"))
+                        .collect())
+                } else {
+                    Ok(pre_tokenized
+                        .get_splits(OffsetReferential::Original, OffsetType::Byte)
+                        .into_iter()
+                        .map(|(s, _, _)| s.to_owned())
+                        .collect())
+                }
             },
         )?;
         if let Some(pbar) = progress {
