@@ -1458,13 +1458,11 @@ where
                 }
             }),
             |seq| {
-                let normalized = self.do_normalize(seq.as_ref())?;
-                let mut pre_tokenized = self.do_pre_tokenize(normalized)?;
-                
                 if self.model.get_vocab_size() > 0 {
-                    // let encoded = self.do_tokenize(pre_tokenized, 0, None, OffsetType::Byte)?;
-                    // let post_encoded = self.post_process(encoded, None, false)?;
-                    // Ok(encoded.get_tokens().to_vec())
+                    let normalized = self
+                        .added_vocabulary
+                        .extract_and_normalize(self.normalizer.as_ref(), seq.as_ref());
+                    let mut pre_tokenized = self.do_pre_tokenize(normalized)?;
 
                     pre_tokenized.tokenize(|normalized| self.model.tokenize(normalized.get()))?;
 
@@ -1474,6 +1472,9 @@ where
                         .map(|(_, _, tokens)| tokens.as_ref().unwrap().into_iter().map(|token| token.value.clone()).join("<|FTL|>"))
                         .collect())
                 } else {
+                    let normalized = self.do_normalize(seq.as_ref())?;
+                    let pre_tokenized = self.do_pre_tokenize(normalized)?;
+
                     Ok(pre_tokenized
                         .get_splits(OffsetReferential::Original, OffsetType::Byte)
                         .into_iter()
